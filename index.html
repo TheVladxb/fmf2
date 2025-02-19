@@ -1,0 +1,201 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2709
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 <!DOCTYPE html>\
+<html lang="en">\
+<head>\
+  <meta charset="UTF-8">\
+  <!-- \
+    Prompt Block: Basic HTML Setup & Mobile Responsiveness \
+    This block sets up the document and ensures it scales on mobile devices.\
+  -->\
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">\
+  <title>Find My Phone App</title>\
+  <style>\
+    /* \
+      Prompt Block: Styling \
+      Basic styles for layout, text, and transitions for the flashing effect.\
+    */\
+    body \{ \
+      font-family: Arial, sans-serif;\
+      text-align: center;\
+      padding: 20px;\
+      transition: background-color 0.5s ease;\
+    \}\
+    #status \{\
+      margin-top: 20px;\
+      font-size: 1.2em;\
+      color: #333;\
+    \}\
+    #config \{\
+      margin-top: 20px;\
+      display: none; /* Hidden until the app starts */\
+    \}\
+    #startButton \{\
+      padding: 10px 20px;\
+      font-size: 1.2em;\
+    \}\
+    img, video \{\
+      margin-top: 20px;\
+      max-width: 100%;\
+      height: auto;\
+    \}\
+  </style>\
+</head>\
+<body>\
+  <h1>Find My Phone App</h1>\
+  <p>\
+    Press the button below to start the app. It will request microphone access and listen for a specific whistle tone or keyword.\
+  </p>\
+  <button id="startButton">Start App</button>\
+  <div id="status"></div>\
+  \
+  <!-- \
+    Prompt Block: Additional Configuration for Extra Features \
+    This block allows toggling extra behavior such as showing an image or playing a video when the alarm is triggered.\
+  -->\
+  <div id="config">\
+    <h2>Extra Features Configuration</h2>\
+    <button id="toggleImage">Enable Image on Alarm</button>\
+    <button id="toggleVideo">Enable Video on Alarm</button>\
+    <div id="extraContent"></div>\
+  </div>\
+\
+  <script>\
+    // -------------------------------\
+    // Prompt Block 1: Setup & Microphone Access\
+    // -------------------------------\
+    let audioContext, analyser, microphone;\
+    let alarmTriggered = false;\
+    let extraImage = false;\
+    let extraVideo = false;\
+    const startButton = document.getElementById('startButton');\
+    const statusDiv = document.getElementById('status');\
+    const configDiv = document.getElementById('config');\
+    const extraContentDiv = document.getElementById('extraContent');\
+\
+    startButton.addEventListener('click', async function() \{\
+      startButton.disabled = true;\
+      statusDiv.textContent = "Requesting microphone access...";\
+      try \{\
+        // Request audio input from the device\
+        const stream = await navigator.mediaDevices.getUserMedia(\{ audio: true \});\
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();\
+        microphone = audioContext.createMediaStreamSource(stream);\
+        analyser = audioContext.createAnalyser();\
+        analyser.fftSize = 2048;\
+        microphone.connect(analyser);\
+        statusDiv.textContent = "Listening for your whistle or keyword...";\
+        configDiv.style.display = "block"; // Show configuration options\
+        analyzeAudio();\
+      \} catch (err) \{\
+        statusDiv.textContent = "Error accessing microphone: " + err;\
+      \}\
+    \});\
+\
+    // -------------------------------\
+    // Prompt Block 2: Audio Analysis & Detection\
+    // -------------------------------\
+    function analyzeAudio() \{\
+      const bufferLength = analyser.frequencyBinCount;\
+      const dataArray = new Uint8Array(bufferLength);\
+      \
+      function detectSound() \{\
+        analyser.getByteFrequencyData(dataArray);\
+        // For demonstration, we assume a whistle falls between ~1000Hz and ~2000Hz.\
+        const sampleRate = audioContext.sampleRate;\
+        const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);\
+        const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);\
+        let sum = 0;\
+        for (let i = startBin; i < endBin; i++) \{\
+          sum += dataArray[i];\
+        \}\
+        const avg = sum / (endBin - startBin);\
+\
+        // Simple threshold detection; may need calibration for real use.\
+        if (avg > 80 && !alarmTriggered) \{\
+          triggerAlarm();\
+        \}\
+        requestAnimationFrame(detectSound);\
+      \}\
+      detectSound();\
+    \}\
+\
+    // -------------------------------\
+    // Prompt Block 3: Alarm Trigger (Sound & Flash)\
+    // -------------------------------\
+    function triggerAlarm() \{\
+      alarmTriggered = true;\
+      statusDiv.textContent = "Alarm Triggered!";\
+      flashScreen();\
+      playAlarmSound();\
+      // If extra features are enabled, display them.\
+      if (extraImage) \{\
+        showExtraImage();\
+      \}\
+      if (extraVideo) \{\
+        showExtraVideo();\
+      \}\
+      // Allow re-triggering after 5 seconds.\
+      setTimeout(() => \{\
+        alarmTriggered = false;\
+        statusDiv.textContent = "Listening for your whistle or keyword...";\
+      \}, 5000);\
+    \}\
+\
+    function flashScreen() \{\
+      document.body.style.backgroundColor = "#ff0000";\
+      setTimeout(() => \{\
+        document.body.style.backgroundColor = "";\
+      \}, 500);\
+    \}\
+\
+    function playAlarmSound() \{\
+      // Generate a simple beep using an oscillator.\
+      const oscillator = audioContext.createOscillator();\
+      const gainNode = audioContext.createGain();\
+      oscillator.connect(gainNode);\
+      gainNode.connect(audioContext.destination);\
+      oscillator.type = "sine";\
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime);\
+      gainNode.gain.setValueAtTime(1, audioContext.currentTime);\
+      oscillator.start();\
+      setTimeout(() => \{\
+        oscillator.stop();\
+      \}, 1000);\
+    \}\
+\
+    // -------------------------------\
+    // Prompt Block 4: Additional Features Configuration\
+    // -------------------------------\
+    document.getElementById('toggleImage').addEventListener('click', function() \{\
+      extraImage = !extraImage;\
+      this.textContent = extraImage ? "Disable Image on Alarm" : "Enable Image on Alarm";\
+      if (!extraImage) \{\
+        extraContentDiv.innerHTML = "";\
+      \}\
+    \});\
+\
+    document.getElementById('toggleVideo').addEventListener('click', function() \{\
+      extraVideo = !extraVideo;\
+      this.textContent = extraVideo ? "Disable Video on Alarm" : "Enable Video on Alarm";\
+      if (!extraVideo) \{\
+        extraContentDiv.innerHTML = "";\
+      \}\
+    \});\
+\
+    function showExtraImage() \{\
+      extraContentDiv.innerHTML += '<img src="https://via.placeholder.com/150" alt="Notification Image">';\
+    \}\
+\
+    function showExtraVideo() \{\
+      extraContentDiv.innerHTML += '<video width="250" controls autoplay><source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">Your browser does not support HTML video.</video>';\
+    \}\
+  </script>\
+</body>\
+</html>\
+}
