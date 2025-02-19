@@ -2,17 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- 
-    Prompt Block: Basic HTML Setup & Mobile Responsiveness 
-    This block sets up the document and ensures it scales on mobile devices.
-  -->
+  <!-- Ensure mobile responsiveness -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Find My Phone App</title>
   <style>
-    /* 
-      Prompt Block: Styling 
-      Basic styles for layout, text, and transitions for the flashing effect.
-    */
+    /* Basic styling and transition effects */
     body { 
       font-family: Arial, sans-serif;
       text-align: center;
@@ -42,15 +36,12 @@
 <body>
   <h1>Find My Phone App</h1>
   <p>
-    Press the button below to start the app. It will request microphone access and listen for a specific whistle tone or keyword.
+    Press the button below to start the app. It will request microphone access and listen for a specific whistle tone.
   </p>
   <button id="startButton">Start App</button>
   <div id="status"></div>
   
-  <!-- 
-    Prompt Block: Additional Configuration for Extra Features 
-    This block allows toggling extra behavior such as showing an image or playing a video when the alarm is triggered.
-  -->
+  <!-- Extra configuration for additional features -->
   <div id="config">
     <h2>Extra Features Configuration</h2>
     <button id="toggleImage">Enable Image on Alarm</button>
@@ -59,9 +50,6 @@
   </div>
 
   <script>
-    // -------------------------------
-    // Prompt Block 1: Setup & Microphone Access
-    // -------------------------------
     let audioContext, analyser, microphone;
     let alarmTriggered = false;
     let extraImage = false;
@@ -82,7 +70,7 @@
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         microphone.connect(analyser);
-        statusDiv.textContent = "Listening for your whistle or keyword...";
+        statusDiv.textContent = "Listening for your whistle...";
         configDiv.style.display = "block"; // Show configuration options
         analyzeAudio();
       } catch (err) {
@@ -90,79 +78,69 @@
       }
     });
 
-    // -------------------------------
-    // Prompt Block 2: Audio Analysis & Detection
-    // -------------------------------
+    // Analyze audio and detect a whistle based on a narrow frequency peak
     function analyzeAudio() {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
-function detectSound() {
-  analyser.getByteFrequencyData(dataArray);
-  const sampleRate = audioContext.sampleRate;
-  const bufferLength = analyser.frequencyBinCount;
+      function detectSound() {
+        analyser.getByteFrequencyData(dataArray);
+        const sampleRate = audioContext.sampleRate;
+        
+        // Determine frequency bins for 1000Hz to 2000Hz
+        const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
+        const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
   
-  // Determine the bins corresponding to 1000Hz to 2000Hz
-  const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
-  const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
-
-  let maxVal = 0;
-  let maxIndex = -1;
+        let maxVal = 0;
+        let maxIndex = -1;
+        // Find the maximum amplitude in the target frequency range
+        for (let i = startBin; i < endBin; i++) {
+          if (dataArray[i] > maxVal) {
+            maxVal = dataArray[i];
+            maxIndex = i;
+          }
+        }
   
-  // Find the maximum amplitude in the target frequency range
-  for (let i = startBin; i < endBin; i++) {
-    if (dataArray[i] > maxVal) {
-      maxVal = dataArray[i];
-      maxIndex = i;
-    }
-  }
-  
-  // Set a threshold for whistling (this may need calibration)
-  const whistleThreshold = 90;
-  
-  // Check if the maximum value exceeds the threshold
-  if (maxVal > whistleThreshold) {
-    // Ensure we are not at the edge of the array to safely check neighbors
-    if (maxIndex > startBin && maxIndex < endBin - 1) {
-      // Check adjacent bins to see if the peak is narrow
-      const leftNeighbor = dataArray[maxIndex - 1];
-      const rightNeighbor = dataArray[maxIndex + 1];
-      
-      // Define a factor to consider the peak narrow (e.g., neighbors are less than 70% of the peak)
-      if (leftNeighbor < maxVal * 0.7 && rightNeighbor < maxVal * 0.7) {
-        triggerAlarm();
+        // Threshold for whistle detection (may require calibration)
+        const whistleThreshold = 90;
+        if (maxVal > whistleThreshold) {
+          // Ensure safe access to neighbors
+          if (maxIndex > startBin && maxIndex < endBin - 1) {
+            const leftNeighbor = dataArray[maxIndex - 1];
+            const rightNeighbor = dataArray[maxIndex + 1];
+            // Check for a narrow peak (neighbors are less than 70% of the peak)
+            if (leftNeighbor < maxVal * 0.7 && rightNeighbor < maxVal * 0.7) {
+              if (!alarmTriggered) {
+                triggerAlarm();
+              }
+            }
+          }
+        }
+        requestAnimationFrame(detectSound);
       }
-    }
-  }
-  
-  requestAnimationFrame(detectSound);
-}
-
       detectSound();
     }
 
-    // -------------------------------
-    // Prompt Block 3: Alarm Trigger (Sound & Flash)
-    // -------------------------------
+    // Trigger the alarm: flash the screen, play sound, and show extra content if enabled
     function triggerAlarm() {
       alarmTriggered = true;
       statusDiv.textContent = "Alarm Triggered!";
       flashScreen();
       playAlarmSound();
-      // If extra features are enabled, display them.
       if (extraImage) {
         showExtraImage();
       }
       if (extraVideo) {
         showExtraVideo();
       }
-      // Allow re-triggering after 5 seconds.
+      // Allow re-triggering after 5 seconds
       setTimeout(() => {
         alarmTriggered = false;
-        statusDiv.textContent = "Listening for your whistle or keyword...";
-      }, 500);
+        statusDiv.textContent = "Listening for your whistle...";
+      }, 5000);
     }
 
+    // Flash the screen red briefly
     function flashScreen() {
       document.body.style.backgroundColor = "#ff0000";
       setTimeout(() => {
@@ -170,8 +148,8 @@ function detectSound() {
       }, 500);
     }
 
+    // Play a simple beep sound using an oscillator
     function playAlarmSound() {
-      // Generate a simple beep using an oscillator.
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
       oscillator.connect(gainNode);
@@ -185,9 +163,7 @@ function detectSound() {
       }, 1000);
     }
 
-    // -------------------------------
-    // Prompt Block 4: Additional Features Configuration
-    // -------------------------------
+    // Toggle extra feature: display an image
     document.getElementById('toggleImage').addEventListener('click', function() {
       extraImage = !extraImage;
       this.textContent = extraImage ? "Disable Image on Alarm" : "Enable Image on Alarm";
@@ -196,6 +172,7 @@ function detectSound() {
       }
     });
 
+    // Toggle extra feature: play a video
     document.getElementById('toggleVideo').addEventListener('click', function() {
       extraVideo = !extraVideo;
       this.textContent = extraVideo ? "Disable Video on Alarm" : "Enable Video on Alarm";
@@ -204,10 +181,12 @@ function detectSound() {
       }
     });
 
+    // Show an image when the alarm is triggered
     function showExtraImage() {
       extraContentDiv.innerHTML += '<img src="https://via.placeholder.com/150" alt="Notification Image">';
     }
 
+    // Show a video when the alarm is triggered
     function showExtraVideo() {
       extraContentDiv.innerHTML += '<video width="250" controls autoplay><source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">Your browser does not support HTML video.</video>';
     }
