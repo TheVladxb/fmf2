@@ -22,9 +22,10 @@
       margin-top: 20px;
       display: none; /* Hidden until the app starts */
     }
-    #startButton {
+    #startButton, #calibrateButton {
       padding: 10px 20px;
       font-size: 1.2em;
+      margin: 5px;
     }
     img, video {
       margin-top: 20px;
@@ -36,14 +37,19 @@
 <body>
   <h1>Find My Phone App</h1>
   <p>
-    Press the button below to start the app. It will request microphone access and listen for a specific whistle tone.
+    Press the button below to start the app. It will request microphone access.
   </p>
   <button id="startButton">Start App</button>
   <div id="status"></div>
   
-  <!-- Extra configuration for additional features -->
+  <!-- Extra configuration for additional features and calibration -->
   <div id="config">
-    <h2>Extra Features Configuration</h2>
+    <h2>Configuration</h2>
+    <!-- Calibration for your unique whistle -->
+    <button id="calibrateButton">Calibrate Whistle</button>
+    <p id="calibrationStatus">Please calibrate your whistle.</p>
+    <br>
+    <!-- Extra features toggles -->
     <button id="toggleImage">Enable Image on Alarm</button>
     <button id="toggleVideo">Enable Video on Alarm</button>
     <div id="extraContent"></div>
@@ -54,71 +60,123 @@
     let alarmTriggered = false;
     let extraImage = false;
     let extraVideo = false;
+    let referenceSpectrum = null; // To store the calibrated whistle spectrum
     const startButton = document.getElementById('startButton');
+    const calibrateButton = document.getElementById('calibrateButton');
     const statusDiv = document.getElementById('status');
+    const calibrationStatus = document.getElementById('calibrationStatus');
     const configDiv = document.getElementById('config');
     const extraContentDiv = document.getElementById('extraContent');
 
+    // Start the app and request microphone access
     startButton.addEventListener('click', async function() {
       startButton.disabled = true;
       statusDiv.textContent = "Requesting microphone access...";
       try {
-        // Request audio input from the device
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         microphone = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         microphone.connect(analyser);
-        statusDiv.textContent = "Listening for your whistle...";
+        statusDiv.textContent = "Microphone access granted. Please calibrate your whistle.";
         configDiv.style.display = "block"; // Show configuration options
+        // Start listening continuously
         analyzeAudio();
       } catch (err) {
         statusDiv.textContent = "Error accessing microphone: " + err;
       }
     });
 
-    // Analyze audio and detect a whistle based on a narrow frequency peak
+    // Event listener for calibration
+    calibrateButton.addEventListener('click', function() {
+      calibrateWhistle();
+    });
+
+    // Calibrate the whistle: record data for a fixed duration and average the spectrum
+    function calibrateWhistle() {
+      calibrationStatus.textContent = "Calibrating... Please whistle now!";
+      let calibrationSamples = [];
+      const duration = 2000; // calibration period in milliseconds
+      const startTime = Date.now();
+
+      function collect() {
+        let now = Date.now();
+        if (now - startTime < duration) {
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          analyser.getByteFrequencyData(dataArray);
+          const sampleRate = audioContext.sampleRate;
+          const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
+          const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
+          let spectrum = [];
+          for (let i = startBin; i < endBin; i++) {
+            spectrum.push(dataArray[i]);
+          }
+          calibrationSamples.push(spectrum);
+          requestAnimationFrame(collect);
+        } else {
+          if (calibrationSamples.length > 0) {
+            const len = calibrationSamples[0].length;
+            let avgSpectrum = [];
+            for (let j = 0; j < len; j++) {
+              let sum = 0;
+              for (let k = 0; k < calibrationSamples.length; k++) {
+                sum += calibrationSamples[k][j];
+              }
+              avgSpectrum.push(sum / calibrationSamples.length);
+            }
+            referenceSpectrum = avgSpectrum;
+            calibrationStatus.textContent = "Calibration complete.";
+            statusDiv.textContent = "Listening for your whistle...";
+          } else {
+            calibrationStatus.textContent = "Calibration failed. Please try again.";
+          }
+        }
+      }
+      collect();
+    }
+
+    // Utility: Compute cosine similarity between two arrays
+    function computeCosineSimilarity(a, b) {
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+      }
+      if (normA === 0 || normB === 0) return 0;
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    // Analyze live audio and compare with the stored whistle reference
     function analyzeAudio() {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
-      
-      function detectSound() {
-        analyser.getByteFrequencyData(dataArray);
-        const sampleRate = audioContext.sampleRate;
-        
-        // Determine frequency bins for 1000Hz to 2000Hz
-        const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
-        const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
-  
-        let maxVal = 0;
-        let maxIndex = -1;
-        // Find the maximum amplitude in the target frequency range
-        for (let i = startBin; i < endBin; i++) {
-          if (dataArray[i] > maxVal) {
-            maxVal = dataArray[i];
-            maxIndex = i;
-          }
-        }
-  
-        // Threshold for whistle detection (may require calibration)
-        const whistleThreshold = 90;
-        if (maxVal > whistleThreshold) {
-          // Ensure safe access to neighbors
-          if (maxIndex > startBin && maxIndex < endBin - 1) {
-            const leftNeighbor = dataArray[maxIndex - 1];
-            const rightNeighbor = dataArray[maxIndex + 1];
-            // Check for a narrow peak (neighbors are less than 70% of the peak)
-            if (leftNeighbor < maxVal * 0.7 && rightNeighbor < maxVal * 0.7) {
-              if (!alarmTriggered) {
-                triggerAlarm();
-              }
-            }
-          }
-        }
-        requestAnimationFrame(detectSound);
+      analyser.getByteFrequencyData(dataArray);
+      const sampleRate = audioContext.sampleRate;
+      const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
+      const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
+      let currentSpectrum = [];
+      for (let i = startBin; i < endBin; i++) {
+        currentSpectrum.push(dataArray[i]);
       }
-      detectSound();
+      // Compute average amplitude in the current spectrum
+      let sum = 0;
+      for (let i = 0; i < currentSpectrum.length; i++) {
+        sum += currentSpectrum[i];
+      }
+      let avgAmplitude = sum / currentSpectrum.length;
+
+      // Only proceed if the sound is loud enough and calibration exists
+      if (avgAmplitude > 50 && referenceSpectrum) {
+        const similarity = computeCosineSimilarity(currentSpectrum, referenceSpectrum);
+        // Uncomment for debugging: console.log('Cosine similarity:', similarity);
+        if (similarity > 0.85 && !alarmTriggered) {
+          triggerAlarm();
+        }
+      }
+      requestAnimationFrame(analyzeAudio);
     }
 
     // Trigger the alarm: flash the screen, play sound, and show extra content if enabled
