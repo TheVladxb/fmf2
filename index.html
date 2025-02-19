@@ -97,24 +97,47 @@
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
-      function detectSound() {
-        analyser.getByteFrequencyData(dataArray);
-        // For demonstration, we assume a whistle falls between ~1000Hz and ~2000Hz.
-        const sampleRate = audioContext.sampleRate;
-        const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
-        const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
-        let sum = 0;
-        for (let i = startBin; i < endBin; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / (endBin - startBin);
+function detectSound() {
+  analyser.getByteFrequencyData(dataArray);
+  const sampleRate = audioContext.sampleRate;
+  const bufferLength = analyser.frequencyBinCount;
+  
+  // Determine the bins corresponding to 1000Hz to 2000Hz
+  const startBin = Math.floor(1000 / (sampleRate / 2) * bufferLength);
+  const endBin = Math.floor(2000 / (sampleRate / 2) * bufferLength);
 
-        // Simple threshold detection; may need calibration for real use.
-        if (avg > 80 && !alarmTriggered) {
-          triggerAlarm();
-        }
-        requestAnimationFrame(detectSound);
+  let maxVal = 0;
+  let maxIndex = -1;
+  
+  // Find the maximum amplitude in the target frequency range
+  for (let i = startBin; i < endBin; i++) {
+    if (dataArray[i] > maxVal) {
+      maxVal = dataArray[i];
+      maxIndex = i;
+    }
+  }
+  
+  // Set a threshold for whistling (this may need calibration)
+  const whistleThreshold = 90;
+  
+  // Check if the maximum value exceeds the threshold
+  if (maxVal > whistleThreshold) {
+    // Ensure we are not at the edge of the array to safely check neighbors
+    if (maxIndex > startBin && maxIndex < endBin - 1) {
+      // Check adjacent bins to see if the peak is narrow
+      const leftNeighbor = dataArray[maxIndex - 1];
+      const rightNeighbor = dataArray[maxIndex + 1];
+      
+      // Define a factor to consider the peak narrow (e.g., neighbors are less than 70% of the peak)
+      if (leftNeighbor < maxVal * 0.7 && rightNeighbor < maxVal * 0.7) {
+        triggerAlarm();
       }
+    }
+  }
+  
+  requestAnimationFrame(detectSound);
+}
+
       detectSound();
     }
 
